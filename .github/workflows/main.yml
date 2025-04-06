@@ -1,0 +1,28 @@
+name: Auto Post 국토부뉴스
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # 매일 오전 7시 (UTC 기준, 한국은 오후 4시)
+  workflow_dispatch:
+
+jobs:
+  post_to_blogger:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install packages
+        run: |
+          pip install feedparser google-api-python-client google-auth
+
+      - name: Create credentials.json
+        run: echo "${{ secrets.CREDENTIALS_JSON }}" > credentials.json
+
+      - name: Run script
+        run: python rss_to_blogger.py
