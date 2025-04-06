@@ -51,9 +51,9 @@ def post_latest_news():
 
     for entry in entries:
         if entry.id in posted_ids:
+            print(f"🔁 이미 포스팅됨: {entry.title}")
             continue
 
-        # 오늘 날짜 포함 제목
         today = datetime.now().strftime("%Y-%m-%d")
         title = f"[국토부] {today} - {entry.title}"
 
