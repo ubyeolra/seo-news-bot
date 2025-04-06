@@ -1,41 +1,93 @@
 import feedparser
 import json
+import os
+from datetime import datetime
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
-# RSS URL
+# 설정
 RSS_FEED = "http://www.molit.go.kr/dev/board/board_rss.jsp?rss_id=NEWS"
+BLOG_ID = "3721610423718385418"
+POSTED_IDS_FILE = "posted_ids.txt"
+MAX_POSTS = 5
 
-# 블로그 ID (Blogger 대시보드에서 확인 가능)
-BLOG_ID = '3721610423718385418'
-
-# Blogger API 인증
+# 인증 정보 로드
 def get_credentials():
     with open("credentials.json", "r") as f:
         info = json.load(f)
     return Credentials.from_authorized_user_info(info, ['https://www.googleapis.com/auth/blogger'])
 
-# 포스팅 함수
+# 포스팅된 뉴스 ID 불러오기
+def load_posted_ids():
+    if not os.path.exists(POSTED_IDS_FILE):
+        return set()
+    with open(POSTED_IDS_FILE, "r") as f:
+        return set(line.strip() for line in f if line.strip())
+
+# 포스팅된 ID 일괄 저장 (최근 1000개 유지)
+def save_posted_ids(ids: set):
+    with open(POSTED_IDS_FILE, "w") as f:
+        for id in list(ids)[-1000:]:
+            f.write(id + '\n')
+
+# 메인 포스팅 로직
 def post_latest_news():
-    creds = get_credentials()
-    service = build("blogger", "v3", credentials=creds)
+    credentials = get_credentials()
+    service = build("blogger", "v3", credentials=credentials)
+
     feed = feedparser.parse(RSS_FEED)
-    entry = feed.entries[0]
+    if feed.bozo:
+        print(f"❌ RSS 파싱 오류: {feed.bozo_exception}")
+        return
 
-    title = f"[국토부] {entry.title}"
-    content = f"""
-    <h2>{entry.title}</h2>
-    <p>{entry.summary}</p>
-    <p><a href="{entry.link}" target="_blank">[원문 보기]</a></p>
-    """
+    entries = feed.entries
+    if not entries:
+        print("❌ 피드에 뉴스가 없습니다.")
+        return
 
-    post = {
-        "title": title,
-        "content": content
-    }
+    posted_ids = load_posted_ids()
+    new_posts_count = 0
 
-    result = service.posts().insert(blogId=BLOG_ID, body=post).execute()
-    print("✅ 업로드 완료:", result["url"])
+    for entry in entries:
+        if entry.id in posted_ids:
+            continue
 
+        # 오늘 날짜 포함 제목
+        today = datetime.now().strftime("%Y-%m-%d")
+        title = f"[국토부] {today} - {entry.title}"
+
+        content = f"""
+        <h2>{entry.title}</h2>
+        <p>{entry.summary}</p>
+        <p><a href="{entry.link}" target="_blank">[원문 보기]</a></p>
+        """
+
+        post = {
+            "title": title,
+            "content": content,
+            "labels": ["국토부", "정책뉴스"]
+        }
+
+        try:
+            result = service.posts().insert(blogId=BLOG_ID, body=post).execute()
+            print(f"✅ 포스팅 완료: {result['url']}")
+            posted_ids.add(entry.id)
+            new_posts_count += 1
+        except HttpError as e:
+            print(f"❌ 포스팅 실패: {e.status_code if hasattr(e, 'status_code') else 'Unknown'} - {e}")
+
+        if new_posts_count >= MAX_POSTS:
+            break
+
+    if new_posts_count > 0:
+        save_posted_ids(posted_ids)
+    else:
+        print("🟡 새로운 뉴스가 없습니다. 오늘은 포스팅하지 않습니다.")
+
+# 실행
 if __name__ == "__main__":
-    post_latest_news()
+    try:
+        post_latest_news()
+    except Exception as e:
+        print("❌ 전체 오류 발생:", e)
