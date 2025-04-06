@@ -2,7 +2,7 @@ name: Auto Post 국토부뉴스
 
 on:
   schedule:
-    - cron: '0 7 * * *'  # 매일 오전 7시 (UTC 기준, 한국은 오후 4시)
+    - cron: '0 7 * * *'  # 매일 오전 7시 UTC = 한국 오후 4시
   workflow_dispatch:
 
 jobs:
@@ -10,19 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install packages
+      - name: Install dependencies
         run: |
-          pip install feedparser google-api-python-client google-auth
+          pip install --upgrade pip
+          pip install feedparser google-api-python-client google-auth google-auth-oauthlib
 
-      - name: Decode credentials.json from base64
-        run: echo "${{ secrets.CREDENTIALS_B64 }}" | base64 -d > credentials.json
+      - name: Restore token.pickle
+        run: echo "${{ secrets.TOKEN_PICKLE_B64 }}" | base64 --decode > token.pickle
 
-      - name: Run script
+      - name: Restore client_secret.json
+        run: echo "${{ secrets.CREDENTIALS_B64 }}" | base64 --decode > client_secret.json
+
+      - name: Run RSS to Blogger script
         run: python rss_to_blogger.py
+
+      - name: Cleanup
+        run: rm -f token.pickle client_secret.json
