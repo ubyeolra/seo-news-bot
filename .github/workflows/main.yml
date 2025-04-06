@@ -21,8 +21,8 @@ jobs:
         run: |
           pip install feedparser google-api-python-client google-auth
 
-      - name: Create credentials.json
-        run: echo "${{ secrets.CREDENTIALS_JSON }}" > credentials.json
+      - name: Decode credentials.json from base64
+        run: echo "${{ secrets.CREDENTIALS_B64 }}" | base64 -d > credentials.json
 
       - name: Run script
         run: python rss_to_blogger.py
